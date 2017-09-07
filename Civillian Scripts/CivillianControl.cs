@@ -24,6 +24,8 @@ public class CivillianControl : MonoBehaviour
     public float health = 100f;
     public CivillianState civillianState;
     public CivillianStatus civillianStatus;
+    private bool isReacting = false;
+    private bool soundDetected = false;
     private FieldOfView fov;
     private AIHearing aiHearing;
     private CivillianPatrol civPatrol;
@@ -42,12 +44,13 @@ public class CivillianControl : MonoBehaviour
 	// Update is called once per frame
 	void FixedUpdate ()
     {
-        if (IsAlive(health) && civillianState != CivillianState.Scared && civillianStatus != CivillianStatus.Dead)
+        if (IsAlive(health) && civillianStatus != CivillianStatus.Dead && !isReacting)
         {
             //TargetDetection(fov.ReturnVisibleTargets());
             TargetLogic(ReturnClosestTarget(fov.visibleTargets.ToArray()));
         }
-        else
+        
+        if (!IsAlive(health))
         {
             civillianStatus = CivillianStatus.Dead;
             SetAllAnimatorStatesToFalse();
@@ -60,10 +63,13 @@ public class CivillianControl : MonoBehaviour
         {
             anim.SetBool("Dead", true);
         }
-		
-        if (aiHearing.NoiseMade() != null)
+
+        if (civillianState == CivillianState.Patrolling)
         {
-           NoiseLogic(aiHearing.NoiseMade());
+            if (aiHearing.NoiseMade() != null && !soundDetected)
+            {
+                NoiseLogic(aiHearing.NoiseMade());
+            }
         }
 	}
 
@@ -102,7 +108,7 @@ public class CivillianControl : MonoBehaviour
 
     public void TargetLogic(Transform target)
     {
-        if (target != null)
+        if (target != null && !isReacting)
         {
             if (target.tag == "Player")
             {
@@ -110,19 +116,41 @@ public class CivillianControl : MonoBehaviour
             }
             else if (target.tag == "Gun")
             {
-                civillianState = CivillianState.Scared;
+                int randomNumber = Random.Range(1, 3);
+                if (randomNumber == 1)
+                {
+                    civillianState = CivillianState.Scared;
+                }
+                else
+                {
+                    civillianState = CivillianState.Fleeing;
+                }
                 NavAgent.isStopped = false;
                 NavAgent.ResetPath();
-                Debug.Log("OMG A GUN");
+                isReacting = true;
             }
             else if (target.tag == "Civillian")
             {
                 if (target.gameObject.GetComponent<CivillianControl>().civillianStatus == CivillianStatus.Dead)
                 {
                     int randomNumber = Random.Range(1, 3);
-                    Debug.Log(randomNumber);
+                    if (randomNumber == 1)
+                    {
+                        civillianState = CivillianState.Scared;
+                    }
+                    else
+                    {
+                        civillianState = CivillianState.Fleeing;
+                    }
                 }
+                isReacting = true;
             }
+           
+
+        }
+        else
+        {
+            isReacting = false;
         }
     }
 
@@ -139,11 +167,30 @@ public class CivillianControl : MonoBehaviour
         if (noise.ToUpper() == "GUN")
         {
             civPatrol.StopAllCoroutines();
-            civillianState = CivillianState.Scared;
+            NavAgent.ResetPath();
+            int randomNumber = Random.Range(1, 3);
+            Debug.Log(randomNumber);
+            if (randomNumber == 1)
+            {
+                civillianState = CivillianState.Fleeing;
+            }
+            else
+            {
+                Debug.Log("Pls");
+                civillianState = CivillianState.Fleeing;
+            }
         }
         else if (noise.ToUpper() == "BULLETHIT")
         {
             Debug.Log("Investigate");
         }
+
+        Invoke("ResetSoundDetected",.5f);
+        soundDetected = true;
+    }
+
+    public void ResetSoundDetected()
+    {
+        soundDetected = false;
     }
 }

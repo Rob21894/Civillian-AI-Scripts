@@ -10,7 +10,7 @@ public class PlayerShooting : MonoBehaviour {
     public float bulletSpeed;
     public Transform bulletSpawn;
     PlayerControl playerControl;
-
+    private MakeNoise makeNoise;
     // OBJECT POOLING VARIABLES
 
     public int amountToSpawn;
@@ -18,7 +18,7 @@ public class PlayerShooting : MonoBehaviour {
 	void Start ()
     {
         playerControl = GetComponent<PlayerControl>();
-
+        makeNoise = GetComponent<MakeNoise>();
         for (int i = 0; i < amountToSpawn; i++)
         {
             GameObject _spawnedBullets = Instantiate(bullet, bulletSpawn.position, bulletSpawn.transform.rotation);
@@ -44,6 +44,8 @@ public class PlayerShooting : MonoBehaviour {
                 newBullet.transform.position = bulletSpawn.transform.position;
                 newBullet.transform.rotation = Quaternion.Euler(90.0f, rot.y, rot.z);
                 newBullet.GetComponent<Rigidbody>().AddForce(transform.forward * bulletSpeed, ForceMode.Impulse);
+                makeNoise.noiseName = MakeNoise.NoiseName.gun;
+                makeNoise.makeNoise = true;
 
             }
         }

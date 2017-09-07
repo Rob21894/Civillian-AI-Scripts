@@ -10,8 +10,10 @@ public class BulletControl : MonoBehaviour {
     float tempDeactivateTimer;
     bool bulletHasHit = false; // bullet has hit something
     public float velocity;
+    private MakeNoise makeNoise;
     void Start()
     {
+        makeNoise = GetComponent<MakeNoise>();
         tempDeactivateTimer = deactivateTimer;
     }
     Vector3 prev = Vector3.zero;
@@ -104,7 +106,10 @@ public class BulletControl : MonoBehaviour {
        // Debug.Log(bulletHasHit);
         if (hitObject.tag == "Wall")
         {
-            Debug.Log("Wall");
+            makeNoise.noiseRadius = 10;
+            makeNoise.makeNoise = true;
+            Debug.Log("Hit Wall");
+
         }
         else if (hitObject.tag == "Civillian")
         {

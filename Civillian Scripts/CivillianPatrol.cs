@@ -28,9 +28,11 @@ public class CivillianPatrol : MonoBehaviour
 
     public CivillianWaypointSettings[] civillianWaypointSettings;
     private GameObject[] wayPoints;
-    private bool updatedWaypoint = true;
+    private bool updatedWaypoint = false;
     private float[] IdleTimes;
     private int currentWaypoint = 0;
+    public GameObject[] exitPoints;
+    private bool isFleeing = false;
     public string IdleAnim;
 
     private CivillianControl civillianControl;
@@ -39,28 +41,41 @@ public class CivillianPatrol : MonoBehaviour
 	{
 	    civillianControl = GetComponent<CivillianControl>();
         InitializeValues();
-	    civillianControl.NavAgent.SetDestination(wayPoints[0].transform.position);
-	    civillianControl.anim.SetBool("Walking", true);
-        // ChooseNextPoint();
-    }
+        exitPoints = new GameObject[GameObject.FindGameObjectsWithTag("Exit Point").Length];
+        exitPoints = GameObject.FindGameObjectsWithTag("Exit Point");
+	    if (wayPoints.Length > 1)
+	    {
+	        civillianControl.NavAgent.SetDestination(wayPoints[currentWaypoint].transform.position);
+	        Debug.Log(wayPoints[0].transform.position);
+	        civillianControl.anim.SetBool("Walking", true);
+	        updatedWaypoint = true;
+        }
+	}
 	
 	// Update is called once per frame
 	void FixedUpdate ()
 	{
 	    if (civillianControl.civillianStatus == CivillianControl.CivillianStatus.Alive)
 	    {
-	        remainingDistance = civillianControl.NavAgent.remainingDistance;
 
-	        if (civillianControl.civillianState == CivillianControl.CivillianState.Patrolling)
+	        switch (civillianControl.civillianState)
 	        {
-	            Patrolling();
+	            case CivillianControl.CivillianState.Patrolling:
+	                remainingDistance = civillianControl.NavAgent.remainingDistance;
+                    Patrolling();
+	                break;
+	            case CivillianControl.CivillianState.Scared:
+	                Scared();
+	                break;
+	            case CivillianControl.CivillianState.Fleeing:
+	                if (!isFleeing)
+	                {
+	                    ChooseExitPoint();
+	                    isFleeing = true;
+	                }
+	                break;
 	        }
-            else if (civillianControl.civillianState == CivillianControl.CivillianState.Scared)
-	        {
-	            Scared();
-	        }
-
-        }
+	    }
 
     }
 
@@ -78,7 +93,7 @@ public class CivillianPatrol : MonoBehaviour
     {
         if (civillianWaypointSettings.Length == 0)
         {
-            Debug.LogError("Assign Waypoints");
+           // Debug.LogError("Assign Waypoints");
             return;
         }
 
@@ -96,6 +111,21 @@ public class CivillianPatrol : MonoBehaviour
         civillianControl.NavAgent.SetDestination(wayPoints[currentWaypoint].transform.position);
         civillianControl.anim.SetBool("Walking", true);
         Invoke("WaypointUpdated",.6f);
+
+    }
+
+    private void ChooseExitPoint()
+    {
+        int rand = Random.Range(0, exitPoints.Length);
+        civillianControl.NavAgent.SetDestination(exitPoints[rand].transform.position);
+        //civillianControl.SetAllAnimatorStatesToFalse();
+        civillianControl.NavAgent.isStopped = false;
+        civillianControl.NavAgent.ResetPath();
+        civillianControl.anim.SetBool("Alive", true);
+        civillianControl.anim.SetBool("Idle", true);
+        civillianControl.anim.SetBool(IdleAnim,false);
+        civillianControl.anim.SetBool("Walking", true);
+        civillianControl.anim.SetBool("Running", true);
 
     }
 
@@ -134,7 +164,7 @@ public class CivillianPatrol : MonoBehaviour
                     if (delay <= 0)
                     {
                         ChooseNextPoint();
-                        civillianControl.anim.SetBool("Idle", false);
+                        civillianControl.anim.SetBool("Idle", true);
                         isIdle = true;
                     }
                 }
@@ -161,6 +191,8 @@ public class CivillianPatrol : MonoBehaviour
     public void Scared()
     {
         civillianControl.SetAllAnimatorStatesToFalse();
+        civillianControl.NavAgent.isStopped = false;
+        civillianControl.NavAgent.ResetPath();
         civillianControl.anim.SetBool("Alive", true);
         civillianControl.anim.SetBool("Idle", true);
         civillianControl.anim.SetBool("Scared", true);
