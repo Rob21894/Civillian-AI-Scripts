@@ -8,7 +8,7 @@ public class FieldOfView : MonoBehaviour
     public float viewRadius;
     [Range(0,360)]
     public float viewAngle;
-    private LayerMask targetMask = 1 << 8 | 1 << 10;
+    private LayerMask targetMask = 1 << 8 | 1 << 9;
     public LayerMask obstacleMask;
     public List<Transform> visibleTargets;
 

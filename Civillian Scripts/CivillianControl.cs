@@ -25,12 +25,13 @@ public class CivillianControl : MonoBehaviour
     public CivillianState civillianState;
     public CivillianStatus civillianStatus;
     private FieldOfView fov;
-
+    private AIHearing aiHearing;
     private CivillianPatrol civPatrol;
 	// Use this for initialization
 	void Start ()
 	{
 	    fov = GetComponent<FieldOfView>();
+	    aiHearing = GetComponent<AIHearing>();
 	    NavAgent = GetComponent<NavMeshAgent>();
 	    anim = GetComponent<Animator>();
 	    civPatrol = GetComponent<CivillianPatrol>();
@@ -41,7 +42,7 @@ public class CivillianControl : MonoBehaviour
 	// Update is called once per frame
 	void FixedUpdate ()
     {
-        if (IsAlive(health))
+        if (IsAlive(health) && civillianState != CivillianState.Scared && civillianStatus != CivillianStatus.Dead)
         {
             //TargetDetection(fov.ReturnVisibleTargets());
             TargetLogic(ReturnClosestTarget(fov.visibleTargets.ToArray()));
@@ -60,6 +61,10 @@ public class CivillianControl : MonoBehaviour
             anim.SetBool("Dead", true);
         }
 		
+        if (aiHearing.NoiseMade() != null)
+        {
+           NoiseLogic(aiHearing.NoiseMade());
+        }
 	}
 
 
@@ -110,6 +115,14 @@ public class CivillianControl : MonoBehaviour
                 NavAgent.ResetPath();
                 Debug.Log("OMG A GUN");
             }
+            else if (target.tag == "Civillian")
+            {
+                if (target.gameObject.GetComponent<CivillianControl>().civillianStatus == CivillianStatus.Dead)
+                {
+                    int randomNumber = Random.Range(1, 3);
+                    Debug.Log(randomNumber);
+                }
+            }
         }
     }
 
@@ -118,6 +131,19 @@ public class CivillianControl : MonoBehaviour
         foreach (AnimatorControllerParameter parameter in anim.parameters)
         {
             anim.SetBool(parameter.name, false);
+        }
+    }
+
+    public void NoiseLogic(string noise)
+    {
+        if (noise.ToUpper() == "GUN")
+        {
+            civPatrol.StopAllCoroutines();
+            civillianState = CivillianState.Scared;
+        }
+        else if (noise.ToUpper() == "BULLETHIT")
+        {
+            Debug.Log("Investigate");
         }
     }
 }
