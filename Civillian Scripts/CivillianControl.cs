@@ -1,8 +1,10 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 using System.Linq;
+using Random = UnityEngine.Random;
 
 public class CivillianControl : MonoBehaviour
 {
@@ -16,6 +18,7 @@ public class CivillianControl : MonoBehaviour
         Patrolling,
         Scared,
         Fleeing,
+        Investigate,
         AlertingGuard
     };
 
@@ -26,9 +29,13 @@ public class CivillianControl : MonoBehaviour
     public CivillianStatus civillianStatus;
     private bool isReacting = false;
     private bool soundDetected = false;
+    [HideInInspector] public bool alertingGuard = false;
+
+
     private FieldOfView fov;
     private AIHearing aiHearing;
     private CivillianPatrol civPatrol;
+    private CivilianSuspicionControl suspicionControl;
 	// Use this for initialization
 	void Start ()
 	{
@@ -37,6 +44,7 @@ public class CivillianControl : MonoBehaviour
 	    NavAgent = GetComponent<NavMeshAgent>();
 	    anim = GetComponent<Animator>();
 	    civPatrol = GetComponent<CivillianPatrol>();
+	    suspicionControl = GetComponent<CivilianSuspicionControl>();
 	    anim.SetBool("Alive", true);
 
     }
@@ -46,8 +54,12 @@ public class CivillianControl : MonoBehaviour
     {
         if (IsAlive(health) && civillianStatus != CivillianStatus.Dead && !isReacting)
         {
-            //TargetDetection(fov.ReturnVisibleTargets());
             TargetLogic(ReturnClosestTarget(fov.visibleTargets.ToArray()));
+            if (suspicionControl.playerDetected)
+            {
+                ChooseAction();
+                suspicionControl.playerDetected = false;
+            }
         }
         
         if (!IsAlive(health))
@@ -88,7 +100,7 @@ public class CivillianControl : MonoBehaviour
 
     public Transform ReturnClosestTarget(Transform[] visibleTargets)
     {
-        //get 3 closest characters (to referencePos)
+        //Returns closest targets (to referencePos)
         if (visibleTargets.Length == 0)
         {
             
@@ -113,18 +125,23 @@ public class CivillianControl : MonoBehaviour
             if (target.tag == "Player")
             {
                 //Debug.Log("Playerrrr");
-            }
-            else if (target.tag == "Gun")
-            {
-                int randomNumber = Random.Range(1, 3);
-                if (randomNumber == 1)
+                if (target.GetComponent<PlayerControl>().anim.GetBool("Holstered"))
                 {
-                    civillianState = CivillianState.Scared;
+                    if (!suspicionControl.isSuspicious)
+                    {
+                        suspicionControl.isSuspicious = true;
+                        suspicionControl.StartCoroutine(suspicionControl.SuspicionDetection());
+                    }
                 }
                 else
                 {
-                    civillianState = CivillianState.Fleeing;
+                    suspicionControl.isSuspicious = false;
+                    suspicionControl.suspicionText.text = "";
                 }
+            }
+            else if (target.tag == "Gun")
+            {
+                ChooseAction();
                 NavAgent.isStopped = false;
                 NavAgent.ResetPath();
                 isReacting = true;
@@ -133,15 +150,7 @@ public class CivillianControl : MonoBehaviour
             {
                 if (target.gameObject.GetComponent<CivillianControl>().civillianStatus == CivillianStatus.Dead)
                 {
-                    int randomNumber = Random.Range(1, 3);
-                    if (randomNumber == 1)
-                    {
-                        civillianState = CivillianState.Scared;
-                    }
-                    else
-                    {
-                        civillianState = CivillianState.Fleeing;
-                    }
+                    ChooseAction();
                 }
                 isReacting = true;
             }
@@ -154,6 +163,95 @@ public class CivillianControl : MonoBehaviour
         }
     }
 
+    public GameObject DetectClosestGuard()
+    {
+        Collider[] col = Physics.OverlapSphere(transform.position, 30.0f, 1 << 9);
+        List<GameObject> guards = new List<GameObject>();
+
+
+        if (col.Length > 0)
+        {
+            foreach (Collider c in col)
+            {
+                RaycastHit hit;
+                if (Physics.Linecast(transform.position + Vector3.up * 2.0f, c.transform.position, out hit,
+                    1 << 10))
+                {
+                    // hit wall
+                }
+                else
+                {
+                    if (c.gameObject.tag == "Guard")
+                    {
+                        guards.Add(c.gameObject);
+                    }
+                }
+            }
+        }
+
+        if (guards.Count > 0)
+        {
+            GameObject getClosestGuard = guards.OrderBy(t => (t.transform.position - transform.position).sqrMagnitude)
+                .FirstOrDefault();
+
+            return getClosestGuard;
+
+        }
+
+        return null;
+    }
+
+    public void ChooseAction()
+    {
+        if (DetectClosestGuard() != null)
+        {
+            NavAgent.ResetPath();
+            NavAgent.isStopped = false;
+            civPatrol.StopAllCoroutines();
+            SetAllAnimatorStatesToFalse();
+            NavAgent.SetDestination(DetectClosestGuard().transform.position);
+            anim.SetBool("Alive", true);
+            anim.SetBool("Idle", true);
+            anim.SetBool("Walking",true);
+            anim.SetBool("Running", true);
+            //Invoke(Alerting(true),.5f);
+            Invoke("Alerting",.5f);
+            civillianState = CivillianState.AlertingGuard;
+
+        }
+        else
+        {
+            Debug.Log("No Guard Detected");
+            ChooseRandomState();
+        }
+
+    }
+
+    public void Alerting()
+    {
+        if (alertingGuard)
+        {
+            alertingGuard = false;
+        }
+        else
+        {
+            alertingGuard = true;
+        }
+    }
+
+    public void ChooseRandomState()
+    {
+        int randomNumber = Random.Range(1, 3);
+        if (randomNumber == 1)
+        {
+            civillianState = CivillianState.Scared;
+        }
+        else
+        {
+            civillianState = CivillianState.Fleeing;
+        }
+
+    }
     public void SetAllAnimatorStatesToFalse()
     {
         foreach (AnimatorControllerParameter parameter in anim.parameters)
@@ -166,23 +264,15 @@ public class CivillianControl : MonoBehaviour
     {
         if (noise.ToUpper() == "GUN")
         {
-            civPatrol.StopAllCoroutines();
-            NavAgent.ResetPath();
-            int randomNumber = Random.Range(1, 3);
-            Debug.Log(randomNumber);
-            if (randomNumber == 1)
-            {
-                civillianState = CivillianState.Fleeing;
-            }
-            else
-            {
-                Debug.Log("Pls");
-                civillianState = CivillianState.Fleeing;
-            }
+            ChooseAction();
         }
         else if (noise.ToUpper() == "BULLETHIT")
         {
             Debug.Log("Investigate");
+        }
+        else if (noise.ToUpper() == "OBSTACLEOBJECT")
+        {
+            
         }
 
         Invoke("ResetSoundDetected",.5f);
@@ -192,5 +282,24 @@ public class CivillianControl : MonoBehaviour
     public void ResetSoundDetected()
     {
         soundDetected = false;
+    }
+
+    public IEnumerator CivilianCoolDown(float timeToWait)
+    {
+        NavAgent.isStopped = false;
+        NavAgent.ResetPath();
+        SetAllAnimatorStatesToFalse();
+        anim.SetBool("Alive", true);
+        anim.SetBool("Idle", true);
+        bool isCooledDown = false;
+
+        while (!isCooledDown)
+        {
+            yield return new WaitForSeconds(timeToWait);
+            civillianState = CivillianState.Patrolling;
+            civPatrol.ChooseNextPoint();
+            isCooledDown = true;
+
+        }
     }
 }

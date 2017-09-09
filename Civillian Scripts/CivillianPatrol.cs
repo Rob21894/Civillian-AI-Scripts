@@ -1,7 +1,9 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
+using Random = UnityEngine.Random;
 
 public class CivillianPatrol : MonoBehaviour
 {
@@ -46,7 +48,6 @@ public class CivillianPatrol : MonoBehaviour
 	    if (wayPoints.Length > 1)
 	    {
 	        civillianControl.NavAgent.SetDestination(wayPoints[currentWaypoint].transform.position);
-	        Debug.Log(wayPoints[0].transform.position);
 	        civillianControl.anim.SetBool("Walking", true);
 	        updatedWaypoint = true;
         }
@@ -55,13 +56,16 @@ public class CivillianPatrol : MonoBehaviour
 	// Update is called once per frame
 	void FixedUpdate ()
 	{
-	    if (civillianControl.civillianStatus == CivillianControl.CivillianStatus.Alive)
+	    if (civillianControl.NavAgent.enabled)
 	    {
-
+	        remainingDistance = civillianControl.NavAgent.remainingDistance;
+        }
+        if (civillianControl.civillianStatus == CivillianControl.CivillianStatus.Alive)
+	    {
+            // Handles all states
 	        switch (civillianControl.civillianState)
 	        {
 	            case CivillianControl.CivillianState.Patrolling:
-	                remainingDistance = civillianControl.NavAgent.remainingDistance;
                     Patrolling();
 	                break;
 	            case CivillianControl.CivillianState.Scared:
@@ -70,10 +74,27 @@ public class CivillianPatrol : MonoBehaviour
 	            case CivillianControl.CivillianState.Fleeing:
 	                if (!isFleeing)
 	                {
-	                    ChooseExitPoint();
+	                    ChooseExitPoint();             
 	                    isFleeing = true;
 	                }
+
+	                if (isFleeing && civillianControl.NavAgent.remainingDistance < 1.0f && updatedWaypoint)
+	                {
+	                    civillianControl.StartCoroutine(civillianControl.CivilianCoolDown(10.0f));
+                        isFleeing = false;	                  
+	                }
 	                break;
+	            case CivillianControl.CivillianState.Investigate:
+                    break;
+	            case CivillianControl.CivillianState.AlertingGuard:
+                    if (civillianControl.NavAgent.remainingDistance < 1.5f && civillianControl.alertingGuard)
+	                {
+	                    civillianControl.StartCoroutine(civillianControl.CivilianCoolDown(10.0f));
+	                    civillianControl.alertingGuard = false;
+	                }
+                    break;
+	            default:
+	                throw new ArgumentOutOfRangeException();
 	        }
 	    }
 
@@ -81,6 +102,7 @@ public class CivillianPatrol : MonoBehaviour
 
     public void InitializeValues()
     {
+        // stores all values in suitable arrays
         wayPoints = new GameObject[civillianWaypointSettings.Length];
         IdleTimes = new float[civillianWaypointSettings.Length];
         for (int i = 0; i < civillianWaypointSettings.Length; i++)
@@ -88,12 +110,14 @@ public class CivillianPatrol : MonoBehaviour
             wayPoints[i] = civillianWaypointSettings[i].wayPoint;
             IdleTimes[i] = civillianWaypointSettings[i].IdleTime;
         }
+
     }
+
     public void Patrolling()
     {
+        // handles simple patrolling logic between waypoints
         if (civillianWaypointSettings.Length == 0)
         {
-           // Debug.LogError("Assign Waypoints");
             return;
         }
 
@@ -105,30 +129,41 @@ public class CivillianPatrol : MonoBehaviour
         }
     }
 
-    private void ChooseNextPoint()
+    public void ChooseNextPoint()
     {
-        currentWaypoint = (currentWaypoint + 1) % wayPoints.Length;
-        civillianControl.NavAgent.SetDestination(wayPoints[currentWaypoint].transform.position);
-        civillianControl.anim.SetBool("Walking", true);
-        Invoke("WaypointUpdated",.6f);
+        currentWaypoint = (currentWaypoint + 1) % wayPoints.Length; // chooses next waypoint from array
+        civillianControl.NavAgent.SetDestination(wayPoints[currentWaypoint].transform.position); // updates destination
+        civillianControl.anim.SetBool("Walking", true); // enables walking animation
+        Invoke("WaypointUpdated",.6f); // updates waypoint boolean to true after .6 seconds
 
     }
 
     private void ChooseExitPoint()
     {
+        StopAllCoroutines();
+        civillianControl.NavAgent.ResetPath();
         int rand = Random.Range(0, exitPoints.Length);
         civillianControl.NavAgent.SetDestination(exitPoints[rand].transform.position);
-        //civillianControl.SetAllAnimatorStatesToFalse();
-        civillianControl.NavAgent.isStopped = false;
-        civillianControl.NavAgent.ResetPath();
         civillianControl.anim.SetBool("Alive", true);
-        civillianControl.anim.SetBool("Idle", true);
         civillianControl.anim.SetBool(IdleAnim,false);
+        civillianControl.anim.SetBool("Idle", true);
         civillianControl.anim.SetBool("Walking", true);
         civillianControl.anim.SetBool("Running", true);
+        Invoke("WaypointUpdated",.5f);
 
     }
 
+    public void IsFleeing()
+    {
+        if (isFleeing)
+        {
+            isFleeing = false;
+        }
+        else
+        {
+            isFleeing = true;
+        }
+    }
     public void WaypointUpdated()
     {
         updatedWaypoint = true;
@@ -140,23 +175,24 @@ public class CivillianPatrol : MonoBehaviour
         bool isIdle = false;
         civillianControl.anim.SetBool("Idle", true);
         float delay = 0.5f;
-        float waitTime = IdleTimes[currentWaypoint];
-        GetAnimation();
-       
-
+        float waitTime = IdleTimes[currentWaypoint]; // stores correct waittime for waypoint
+        GetAnimation();  
+  
         while (!isIdle)
         {
-            if (civillianWaypointSettings[currentWaypoint].targetRotation != null)
+            // Rotates player to target roation
+            if (civillianWaypointSettings[currentWaypoint].targetRotation != null) // check is rotation exists
             {
                 Vector3 direction =  (civillianWaypointSettings[currentWaypoint].targetRotation.position - transform.position).normalized;
                 Quaternion lookRotation = Quaternion.LookRotation(direction);
                 transform.rotation = Quaternion.Slerp(transform.rotation, lookRotation, Time.deltaTime * 2);
                 transform.eulerAngles = new Vector3(0, transform.eulerAngles.y,0);
             }
+
             waitTime -= 1.0f * Time.deltaTime;
             if (waitTime <= 0)
             {
-                if (!civillianControl.anim.IsInTransition(0) && civillianControl.anim.GetCurrentAnimatorStateInfo(0).normalizedTime > 1.0f)
+                if (!civillianControl.anim.IsInTransition(0) && civillianControl.anim.GetCurrentAnimatorStateInfo(0).normalizedTime > 1.0f) // waits for animation to finish cycle before moving
                 {
                     civillianControl.anim.SetBool(IdleAnim, false);
                     delay -= 1.0f * Time.deltaTime;
@@ -180,14 +216,6 @@ public class CivillianPatrol : MonoBehaviour
         civillianControl.anim.SetBool(IdleAnim, true);
     }
 
-    bool AnimatorIsPlaying()
-    {
-        return civillianControl.anim.GetCurrentAnimatorStateInfo(0).length >
-               civillianControl.anim.GetCurrentAnimatorStateInfo(0).normalizedTime;
-    }
-
-
-
     public void Scared()
     {
         civillianControl.SetAllAnimatorStatesToFalse();
@@ -197,5 +225,4 @@ public class CivillianPatrol : MonoBehaviour
         civillianControl.anim.SetBool("Idle", true);
         civillianControl.anim.SetBool("Scared", true);
     }
-
 }

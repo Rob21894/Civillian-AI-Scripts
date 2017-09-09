@@ -56,8 +56,9 @@ public class MakeNoise : MonoBehaviour
         {
             if (NPCS[i].tag == "Civillian")
             {
-                NPCS[i].GetComponent<AIHearing>().NoiseDetected(this.transform.position,NPCS[i].GetComponent<CivillianControl>().gameObject.transform.position, noiseName);
+                NPCS[i].GetComponent<AIHearing>().NoiseDetected(this.transform.position, NPCS[i].GetComponent<CivillianControl>().gameObject.transform.position, noiseName);
             }
         }
     }
+
 }
